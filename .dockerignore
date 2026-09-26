@@ -1,0 +1,14 @@
+.env
+.env.*
+*.pem
+__pycache__/
+chat_logs/
+pdf_store/
+chroma_data/
+.git/
+tests/
+terraform/
+terraform-retired/
+.tools/
+scripts/
+*.zip

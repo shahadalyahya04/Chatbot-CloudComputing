@@ -1,0 +1,47 @@
+# Preserve the existing containers and Chroma volume when this folder is renamed.
+name: stage3_azure
+
+services:
+  chromadb:
+    image: chromadb/chroma:latest
+    restart: unless-stopped
+    environment:
+      CHROMA_PERSIST_PATH: /data
+    volumes:
+      - chroma_azure_data:/data
+
+  backend:
+    image: ${DOCKERHUB_NAMESPACE:-stage3_azure}/chatbot-backend:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      - chromadb
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health/', timeout=20)"]
+      interval: 30s
+      timeout: 25s
+      retries: 5
+      start_period: 30s
+
+  chatbot:
+    image: ${DOCKERHUB_NAMESPACE:-stage3_azure}/chatbot-frontend:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.chatbot
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:5000
+    ports:
+      - "8501:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  chroma_azure_data:

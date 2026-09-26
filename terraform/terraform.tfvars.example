@@ -1,0 +1,4 @@
+resource_group_name = "chatbot-RG"
+subscription_id     = "YOUR-SUBSCRIPTION-ID"
+vm_name             = "chatbot-vm"
+key_vault_name      = "YOUR-UNIQUE-KEY-VAULT-NAME"
