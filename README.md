@@ -1,49 +1,52 @@
-# Cloud Chatbot — Project Stage 7
+# Cloud Chatbot
 
 ## 1. Project Summary
 
-This application supports regular AI conversations and questions about uploaded PDF documents. Users can create, save, load, and delete chats through a Streamlit interface connected to a FastAPI backend.
+Cloud Chatbot is a web application for AI conversations and questions about PDF documents. Users can upload a PDF, ask questions about its contents, and save or reopen conversations.
 
-- **OpenRouter** provides chat responses using `openrouter/free` and embeddings using `nvidia/nemotron-3-embed-1b:free`.
-- **ChromaDB** stores document embeddings in a persistent Docker volume on the Azure VM.
-- **Azure Database for PostgreSQL** stores chat metadata in `appdb`.
-- **Azure Blob Storage** stores chat messages and uploaded PDFs.
-- **Azure Key Vault** stores the application's secrets.
-- **Terraform** manages the project's database, storage, Key Vault, VM identity, and vault permissions. **GitHub Actions** builds Docker images and deploys them to the existing Azure VM.
+The application runs on an Azure Linux virtual machine using Docker Compose:
+
+| Component | Purpose |
+| --- | --- |
+| Streamlit | Web interface |
+| FastAPI | Chat, document processing, and storage API |
+| OpenRouter | Chat responses and text embeddings |
+| ChromaDB | Vector search over uploaded documents |
+| Azure PostgreSQL | Conversation metadata |
+| Azure Blob Storage | PDF files and conversation messages |
+| Azure Key Vault | Application secrets |
+
+Terraform manages the cloud resources defined in this repository. GitHub Actions builds the application images, publishes them to Docker Hub, and deploys them to the VM.
 
 ## 2. Requirements
 
-- An Azure account with an existing Linux VM, PostgreSQL Flexible Server, Blob Storage account/container, and permission to manage Key Vault and role assignments.
-- An OpenRouter account and API key. An OpenAI API key is not used.
-- GitHub and Docker Hub accounts for automated deployment.
-- Git, Docker Engine, and Docker Compose on the VM.
-- Azure CLI and Terraform 1.5 or newer, below 2.0, for infrastructure setup. Provider versions are declared in `terraform/providers.tf` and the lock file.
-- Python 3.12 for installing or running Python tools outside Docker; the Dockerfiles include Python themselves.
-- DBeaver or another PostgreSQL client for database setup.
+**To deploy and run the application:**
 
-Python packages are listed in `requirements.txt`, including Streamlit, FastAPI, Uvicorn, LangChain, ChromaDB, the OpenAI-compatible client used with OpenRouter, PostgreSQL and Azure SDKs, and PDF processing libraries.
+- An Azure subscription with a Linux VM, PostgreSQL Flexible Server, and a Blob Storage account and container.
+- An OpenRouter account and API key.
+- Git, Docker Engine, and the Docker Compose plugin on the VM.
+- Azure CLI and Terraform for provisioning and managing infrastructure. Terraform version constraints are defined in `terraform/providers.tf`.
+- A PostgreSQL client, such as DBeaver, for database setup.
+- GitHub and Docker Hub accounts for automated deployment.
+
+**For Python development outside Docker:** Python 3.12 and the packages in `requirements.txt`. These include Streamlit, FastAPI, Uvicorn, LangChain, ChromaDB, PostgreSQL and Azure clients, and PDF processing libraries. Docker installs Python and these packages during the image build.
 
 ## 3. Installation
 
-On the Azure VM, configure a read-only GitHub deploy key for this private repository. The deployment script expects the private key at `/home/azureuser/.ssh/github_deploy`, with its public key added to the repository's Deploy keys and GitHub's host keys verified in `known_hosts`.
+### Get the source code
+
+Clone the repository using a GitHub account with access to it:
 
 ```bash
-cd /home/azureuser
-GIT_SSH_COMMAND='ssh -i /home/azureuser/.ssh/github_deploy -o IdentitiesOnly=yes' \
-  git clone git@github.com:shahadalyahya04/chatbot-project-CloudComputing.git
+git clone https://github.com/shahadalyahya04/chatbot-project-CloudComputing.git
 cd chatbot-project-CloudComputing
-cp .env.example .env
 ```
 
-Fill in `.env` and configure the Key Vault secrets described in section 5. Docker installs the Python dependencies when building images. For a separate Python development environment, install them with:
+### Configure the Azure resources
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+The supplied Terraform configuration targets an existing deployment. It manages PostgreSQL, Blob Storage, Key Vault, and the existing VM's identity and vault access. It does not provision a new VM or network.
 
-For this project's infrastructure, authenticate with Azure CLI, copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars`, and fill in the subscription and resource names. Then run:
+Before using a different Azure environment, update the resource names and import IDs in `terraform/` to match that environment. Copy `terraform/terraform.tfvars.example` to `terraform/terraform.tfvars`, fill in its values, and run these commands from a machine with Azure CLI and Terraform installed:
 
 ```bash
 az login
@@ -54,82 +57,109 @@ terraform apply
 cd ..
 ```
 
-The Terraform files target this project's existing resources and import IDs. Review them before applying to a different Azure environment; they do not create a new VM or network from scratch.
+Next, complete the database and storage setup:
 
-Create the `appdb` database if it does not exist, allow the VM and your client IP through PostgreSQL's firewall, and run `setup_appdb.sql` as the database administrator while connected to `appdb`. This creates `appuser`, creates `advanced_chats`, and grants the required permissions.
+1. Create a PostgreSQL database named `appdb` if it does not already exist.
+2. Allow the VM's outbound IP and your database client's IP through the PostgreSQL firewall.
+3. Connect to `appdb` as the database administrator and run `setup_appdb.sql`. This creates the application user and the `advanced_chats` table and grants their required permissions.
+4. Create a Blob Storage container and generate a Blob service SAS URL with permissions to read, list, write, and delete the application's files. For an account SAS, select all three allowed resource types.
+5. Add the Key Vault secrets listed in section 5.
+
+### Prepare the application on the VM
+
+Place the repository on the VM, then create its environment file from the example:
+
+```bash
+cp .env.example .env
+```
+
+Set the vault name and Docker Hub namespace as described in section 5. The VM must have a managed identity with the **Key Vault Secrets User** role on the application's vault; the Terraform configuration sets up this access.
+
+If you are developing Python code outside Docker, install the dependencies in a virtual environment. These Linux commands install the packages only; the database, storage, vector service, and Azure authentication must also be configured:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
 ## 4. Run the Project
 
-On the configured Azure VM, use the published images:
-
-```bash
-cd /home/azureuser/chatbot-project-CloudComputing
-docker compose pull backend chatbot
-docker compose up -d --no-build --wait
-docker compose ps
-```
-
-To build the images from the source on the VM instead:
+From the repository directory on the configured Azure VM, build and start all three services:
 
 ```bash
 docker compose up -d --build --wait
+docker compose ps
 ```
 
-Open `http://<VM_PUBLIC_IP>:8501` in your browser. The current deployment is at [http://20.83.152.195:8501](http://20.83.152.195:8501). Allow inbound TCP port 8501 in the VM's network security group.
+Open `http://<VM_PUBLIC_IP>:8501` in a browser. Allow inbound TCP port `8501` in the VM's network security group. The interface supports creating conversations, uploading PDFs, and reopening saved chats.
 
-Check the backend from inside the VM:
+For a deployment with images already published to Docker Hub, use:
+
+```bash
+docker compose pull backend chatbot
+docker compose up -d --no-build --wait
+```
+
+Check the backend's health from inside the VM:
 
 ```bash
 curl --fail http://127.0.0.1:5000/health/
 ```
 
-Compose starts Streamlit, FastAPI, and ChromaDB together. The backend's port 5000 is bound to the VM's loopback interface. Keep the Compose project name `stage3_azure` and volume `stage3_azure_chroma_azure_data` to retain existing vector data.
-
-For automated updates, push application changes to `main`. `.github/workflows/deploy.yml` builds and pushes the backend and frontend images to Docker Hub, then uses Azure CLI to run `update_app.sh` on the VM. The script pulls the repository and deploys images tagged with that commit's SHA.
+The backend is available to the frontend over the Compose network; its host port is restricted to the VM's loopback interface. ChromaDB stores its data in a persistent Docker volume. Changing the Compose project or volume name will select a different data volume.
 
 ## 5. API Keys & Environment Variables
 
-The VM's `.env` contains only these two settings:
+### Application configuration
+
+Set these values in the VM's `.env` file:
 
 ```dotenv
-KEY_VAULT_NAME=shahad-chatbot-kv
-DOCKERHUB_NAMESPACE=shahad555
+KEY_VAULT_NAME=your-key-vault-name
+DOCKERHUB_NAMESPACE=your-dockerhub-username
 ```
 
-Store the following values as secrets in Azure Key Vault:
+Store the following secrets in that Key Vault:
 
-| Key Vault secret | Value |
+| Secret name | Required value |
 | --- | --- |
 | `PROJ-DB-NAME` | `appdb` |
 | `PROJ-DB-USER` | `appuser` |
-| `PROJ-DB-PASSWORD` | The application database user's password |
+| `PROJ-DB-PASSWORD` | Password assigned to `appuser` |
 | `PROJ-DB-HOST` | PostgreSQL server hostname |
 | `PROJ-DB-PORT` | `5432` |
-| `PROJ-OPENROUTER-API-KEY` | Your OpenRouter API key |
-| `PROJ-AZURE-STORAGE-SAS-URL` | Blob service SAS URL with the required storage permissions |
-| `PROJ-AZURE-STORAGE-CONTAINER` | `chatbot-files` |
-| `PROJ-CHROMADB-HOST` | `chromadb` for the supplied Compose network |
+| `PROJ-OPENROUTER-API-KEY` | OpenRouter API key |
+| `PROJ-AZURE-STORAGE-SAS-URL` | Blob service SAS URL |
+| `PROJ-AZURE-STORAGE-CONTAINER` | Name of the storage container |
+| `PROJ-CHROMADB-HOST` | `chromadb` for the supplied Compose configuration |
 | `PROJ-CHROMADB-PORT` | `8000` |
 
-The OpenRouter secret replaces the assignment's OpenAI secret name. The backend uses `DefaultAzureCredential` and the VM's managed identity, which needs the **Key Vault Secrets User** role on the vault. Terraform configures this access. Values are populated outside Terraform and are not committed to Git.
+The backend reads these values at startup through `DefaultAzureCredential` using the VM's managed identity. The configured chat model is `openrouter/free`, and the embedding model is `nvidia/nemotron-3-embed-1b:free`. Both use OpenRouter.
 
-Compose sets the frontend's `BACKEND_URL` to `http://backend:5000`. The deployment script sets `IMAGE_TAG` to the commit SHA; manual Compose commands default to `latest`.
+Compose sets `BACKEND_URL=http://backend:5000` for the frontend. `IMAGE_TAG` selects the application image version and defaults to `latest` for manual commands.
 
-Add these GitHub repository Actions secrets for automated deployment:
+### Automated deployment
 
-| GitHub secret | Purpose |
+Add these secrets under the GitHub repository's **Settings → Secrets and variables → Actions**:
+
+| Secret name | Required value |
 | --- | --- |
 | `DOCKERHUB_USERNAME` | Docker Hub username |
-| `DOCKERHUB_TOKEN` | Docker Hub token with read/write permissions |
+| `DOCKERHUB_TOKEN` | Docker Hub access token with read/write permissions |
 | `AZURE_CREDENTIALS` | Service principal JSON containing `clientId`, `clientSecret`, `subscriptionId`, and `tenantId` |
-| `RESOURCE_GROUP_NAME` | `chatbot-RG` |
-| `VM_NAME` | `chatbot-vm` |
+| `RESOURCE_GROUP_NAME` | Resource group containing the VM |
+| `VM_NAME` | Deployment VM name |
 
-The deployment service principal needs permission to invoke commands on the VM. The Docker Hub repositories `shahad555/chatbot-backend` and `shahad555/chatbot-frontend` are public so the VM can pull images without storing a Docker Hub token.
+Give the service principal permission to invoke commands on the VM. Use public Docker Hub repositories named `chatbot-backend` and `chatbot-frontend` so the VM can pull the images without a registry token.
+
+The VM also needs a read-only SSH deploy key for the GitHub repository. `update_app.sh` expects the private key at `/home/azureuser/.ssh/github_deploy`, a verified GitHub host entry in `known_hosts`, and the repository at `/home/azureuser/chatbot-project-CloudComputing`. Set the private key's permissions to `400`. If the VM username or directory differs, update the paths in both `update_app.sh` and `.github/workflows/deploy.yml`.
+
+Once configured, a push to `main` starts the workflow. It builds and publishes both images, then invokes the update script through Azure CLI. The script retrieves the source and runs images tagged with the same commit SHA.
 
 ## 6. Known Issues
 
-- The application does not implement user login or separate each user's stored chats. Authentication and user isolation are future improvements.
-- Secrets are loaded when the backend starts. After changing a Key Vault value, restart the backend with `docker compose restart backend`. Renew the Blob Storage SAS before it expires and update its Key Vault secret.
-- Running Compose on a personal computer requires separate Azure authentication and access to the cloud services. The supplied setup is configured for the Azure VM's managed identity.
-- Python dependency versions are not pinned in `requirements.txt`; future package updates may require compatibility checks.
+- User authentication and per-user chat isolation are not implemented. Stored conversations are shared across users of the application.
+- Key Vault secrets are read only at startup. After updating a secret, run `docker compose restart backend`. Expired Blob Storage SAS tokens must be renewed and updated in the vault.
+- The supplied deployment assumes an Azure VM with a managed identity. Running the application elsewhere requires separate Azure authentication and service connectivity.
+- Python package versions are not pinned, so future dependency updates may require compatibility testing.
