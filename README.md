@@ -18,6 +18,20 @@ The application runs on an Azure Linux virtual machine using Docker Compose:
 
 Terraform manages the cloud resources defined in this repository. GitHub Actions builds the application images, publishes them to Docker Hub, and deploys them to the VM.
 
+### Application Preview
+
+**Welcome screen** — Create a conversation, attach a PDF, or reopen a saved chat from the sidebar.
+
+![Cloud Chatbot welcome screen with a dark navy interface and mint accents](docs/screenshots/welcome.png)
+
+**AI conversation** — Ask questions and read responses directly in the chat interface.
+
+![Chatbot answering a question about cloud computing](docs/screenshots/chat.png)
+
+**PDF summarization** — Upload a document and ask the chatbot to summarize its contents.
+
+![Chatbot summarizing an uploaded PDF presentation](docs/screenshots/pdf-summary.png)
+
 ## 2. Requirements
 
 **To deploy and run the application:**
