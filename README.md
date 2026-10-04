@@ -22,15 +22,16 @@ Terraform manages the cloud resources defined in this repository. GitHub Actions
 
 **Welcome screen** — Create a conversation, attach a PDF, or reopen a saved chat from the sidebar.
 
-![Cloud Chatbot welcome screen with a dark navy interface and mint accents](docs/screenshots/welcome.png)
+<img width="957" height="500" alt="Screenshot 2026-10-04 204342" src="https://github.com/user-attachments/assets/643297d0-9e13-45ef-ac85-21aaec9b0090" />
 
 **AI conversation** — Ask questions and read responses directly in the chat interface.
 
-![Chatbot answering a question about cloud computing](docs/screenshots/chat.png)
+<img width="954" height="499" alt="image" src="https://github.com/user-attachments/assets/c9fde7c5-ed1c-48e2-b469-4ae493b3db4c" />
+
 
 **PDF summarization** — Upload a document and ask the chatbot to summarize its contents.
 
-![Chatbot summarizing an uploaded PDF presentation](docs/screenshots/pdf-summary.png)
+<img width="955" height="503" alt="Screenshot 2026-10-04 204654" src="https://github.com/user-attachments/assets/51e6fb27-6ab8-48cd-a1f3-d32b6564a09a" />
 
 ## 2. Requirements
 
