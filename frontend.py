@@ -2,6 +2,93 @@ import uuid
 import requests
 import streamlit as st
 import os
+
+st.set_page_config(
+    page_title="Cloud Chatbot", page_icon="☁️", layout="centered",
+    initial_sidebar_state="expanded",
+)
+
+# Presentation only: keep the existing chat and storage operations below.
+st.markdown("""
+<style>
+.stApp { background: #0c1420; }
+[data-testid="stHeader"] { background: #0c1420; }
+[data-testid="stMainBlockContainer"] { max-width: 960px; padding-top: 3rem; }
+[data-testid="stSidebar"] { background: #111d2c; border-right: 1px solid #233247; }
+[data-testid="stSidebar"] > div:first-child { padding-top: 2rem; }
+.brand { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+.brand-mark { display: grid; place-items: center; width: 42px; height: 42px;
+    background: #163c40; color: #8ce4d3; border: 1px solid #2b6261;
+    border-radius: 14px; font-size: 25px; }
+.brand-name { font-size: 19px; font-weight: 700; color: #edf3fc; }
+.brand-note { font-size: 12px; color: #98aac1; margin-top: 2px; }
+.section-label { color: #98aac1; font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; margin: 22px 0 12px; }
+.workspace-heading { display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding-bottom: 20px; border-bottom: 1px solid #233247; margin-bottom: 28px; }
+.workspace-heading strong { color: #edf3fc; font-size: 18px; }
+.workspace-heading span { color: #98aac1; font-size: 12px; }
+.welcome { text-align: center; padding: 56px 12px 36px; }
+.welcome-mark { display: inline-grid; place-items: center; height: 72px; width: 72px;
+    border-radius: 24px; background: #163c40; color: #8ce4d3;
+    border: 1px solid #2b6261; font-size: 38px; margin-bottom: 24px; }
+.welcome .eyebrow { color: #8ce4d3; font-size: 11px; font-weight: 700;
+    letter-spacing: 3px; margin-bottom: 14px; }
+.welcome h1 { color: #edf3fc; font-size: clamp(30px, 5vw, 44px);
+    letter-spacing: -1.5px; line-height: 1.18; padding: 0 0 16px; }
+.welcome p { color: #a6b5ca; font-size: 16px; max-width: 470px;
+    margin: 0 auto; line-height: 1.7; }
+.welcome-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    max-width: 620px; margin: 0 auto 28px; }
+.welcome-card { border: 1px solid #293b50; background: #111d2c;
+    padding: 24px; border-radius: 18px; }
+.welcome-card .card-icon { color: #8ce4d3; font-size: 22px; margin-bottom: 14px; }
+.welcome-card strong { display: block; color: #edf3fc; margin-bottom: 8px; font-size: 15px; }
+.welcome-card p { color: #a6b5ca; font-size: 13px; line-height: 1.6; margin: 0; }
+.welcome-hint { color: #98aac1; font-size: 12px; text-align: center; margin-bottom: 24px; }
+[data-testid="stSidebar"] [data-testid="stButton"] button { width: 100%;
+    min-height: 43px; border-radius: 10px; }
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+    border: 1px dashed #3a5069; border-radius: 12px; }
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 8px; }
+[data-testid="stSidebar"] [role="radiogroup"] > label {
+    padding: 10px 12px; border: 1px solid #293b50; border-radius: 10px; }
+[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+    background: #163c40; border-color: #4b938a; }
+[data-testid="stChatMessage"] { border: 1px solid #293b50;
+    border-radius: 16px; padding: 20px; margin-bottom: 12px; }
+[data-testid="stChatInput"] { border-radius: 16px; border: 1px solid #405771; }
+@media (max-width: 640px) {
+    .welcome { padding-top: 24px; }
+    .welcome-cards { grid-template-columns: 1fr; }
+    .workspace-heading span { display: none; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+def show_welcome(has_chat=False):
+    st.markdown("""
+    <div class="welcome">
+        <div class="welcome-mark" aria-hidden="true">☁</div>
+        <div class="eyebrow">A LITTLE CURIOSITY. ENDLESS POSSIBILITIES.</div>
+        <h1>Where ideas become conversations.</h1>
+        <p>Ask a question, explore an idea, or find answers in your documents.
+        Your next conversation starts here.</p>
+    </div>
+    <div class="welcome-cards">
+        <div class="welcome-card"><div class="card-icon" aria-hidden="true">✧</div>
+            <strong>Start with a question</strong>
+            <p>Think things through, discover something new, or get a fresh perspective.</p></div>
+        <div class="welcome-card"><div class="card-icon" aria-hidden="true">▤</div>
+            <strong>Bring your documents</strong>
+            <p>Upload a PDF from the sidebar and ask questions about its contents.</p></div>
+    </div>
+    """, unsafe_allow_html=True)
+    hint = "Write a message below to begin." if has_chat else "Create a chat or choose a saved conversation in the sidebar."
+    st.markdown(f'<div class="welcome-hint">{hint}</div>', unsafe_allow_html=True)
+
+
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:5000")
 LOAD_CHAT_URL = f"{BACKEND_URL}/load_chat/"
 SAVE_CHAT_URL = f"{BACKEND_URL}/save_chat/"
@@ -25,8 +112,18 @@ def load_chats_from_db():
     try:
         response = requests.get(LOAD_CHAT_URL, timeout=60)
         response.raise_for_status()
-    except requests.RequestException as error:
-        st.error(f"Could not reach the backend: {error}")
+    except requests.HTTPError as error:
+        detail = "Check the backend logs for details."
+        try:
+            body = error.response.json()
+            if isinstance(body, dict) and isinstance(body.get("detail"), str):
+                detail = body["detail"]
+        except ValueError:
+            pass
+        st.error(f"Could not load chats (HTTP {error.response.status_code}): {detail}")
+        return False
+    except requests.RequestException:
+        st.error("Could not reach the backend. Check that the backend is running and accessible.")
         return False
 
     for record in response.json():
@@ -136,17 +233,20 @@ def select_chat(chat_id):
 
 # UI Layout - Sidebar
 with st.sidebar:
-    st.title("Chat Management")
-    uploaded_pdf = st.file_uploader("Upload PDF", type="pdf", key="pdf_uploader")
-    chat_name = st.text_input("Enter Chat Name:", key="new_chat_name")
+    st.markdown('''<div class="brand"><div class="brand-mark" aria-hidden="true">☁</div>
+        <div><div class="brand-name">Cloud Chatbot</div>
+        <div class="brand-note">Your space to explore.</div></div></div>
+        <div class="section-label">NEW CONVERSATION</div>''', unsafe_allow_html=True)
+    uploaded_pdf = st.file_uploader("Attach a PDF", type="pdf", key="pdf_uploader")
+    chat_name = st.text_input("Chat name", key="new_chat_name", placeholder="Give your conversation a name")
 
-    if st.button("Create New Chat"):
+    if st.button("＋  New chat", type="primary"):
         if chat_name.strip():
             create_chat(chat_name.strip())
         else:
             st.warning("Chat name cannot be empty.")
 
-    if st.button("Create New Chat with PDF"):
+    if st.button("New chat with PDF"):
         if not uploaded_pdf:
             st.warning("Please upload a PDF file before creating the chat.")
         elif chat_name.strip():
@@ -155,36 +255,43 @@ with st.sidebar:
             st.warning("Chat name cannot be empty.")
 
     if st.session_state["history_chats"]:
+        st.markdown('<div class="section-label">YOUR CONVERSATIONS</div>', unsafe_allow_html=True)
         chat_options = {
             chat["id"]: st.session_state["chat_names"][chat["id"]]
             for chat in st.session_state["history_chats"]
         }
         selected_chat = st.radio(
-            "Select Chat",
+            "Saved chats",
             options=list(chat_options.keys()),
             format_func=lambda x: chat_options[x],
             key="chat_selector",
             on_change=lambda: select_chat(st.session_state.chat_selector),
         )
         st.session_state["current_chat"] = selected_chat
-        st.button("Delete Chat", on_click=delete_chat)
+        st.button("Delete chat", on_click=delete_chat)
 
 # UI Layout - Chat Window
+st.markdown('''<div class="workspace-heading"><strong>Conversation</strong>
+    <span>Cloud Chatbot / Your workspace</span></div>''', unsafe_allow_html=True)
 if st.session_state["current_chat"]:
     current_chat_id = st.session_state["current_chat"]
     current_chat = next(
         c for c in st.session_state["history_chats"] if c["id"] == current_chat_id
     )
     chat_name = st.session_state["chat_names"][current_chat_id]
+    st.subheader(chat_name)
 
     if current_chat.get("pdf_name"):
         st.caption(f"📄 Associated with: {current_chat['pdf_name']}")
+
+    if not current_chat["messages"]:
+        show_welcome(has_chat=True)
 
     for msg in current_chat["messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Your Message:"):
+    if prompt := st.chat_input("Ask a question or share an idea…"):
         current_chat["messages"].append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -227,4 +334,4 @@ if st.session_state["current_chat"]:
                     current_chat.get("pdf_uuid"),
                 )
 else:
-    st.info("Please create or select a chat from the sidebar to start.")
+    show_welcome()
